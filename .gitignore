@@ -149,7 +149,9 @@ fabric.properties
 *.dsk
 *.txt
 *.log
+
 userprog/build/
+thread/build/
 vm/build/
 
 results
