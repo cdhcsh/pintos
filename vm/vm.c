@@ -68,25 +68,31 @@ err:
 
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
-spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
+spt_find_page(struct supplemental_page_table *spt, void *va)
 {
 	struct page *page = NULL;
-	/* TODO: Fill this function. */
-
+	/** #project3-Memory management */
+	struct page _;
+	struct hash_elem *e;
+	e = hash_find(spt, &_);
+	if (e)
+		page = hash_entry(e, struct page, hash_elem);
 	return page;
 }
 
 /* Insert PAGE into spt with validation. */
-bool spt_insert_page(struct supplemental_page_table *spt UNUSED,
-					 struct page *page UNUSED)
+bool spt_insert_page(struct supplemental_page_table *spt,
+					 struct page *page)
 {
-	int succ = false;
-	/* TODO: Fill this function. */
-
-	return succ;
+	/** #project3-Memory management */
+	if (hash_insert(spt, &page->hash_elem))
+		return false;
+	else
+		return true;
 }
+Feat : spt_insert_page(), spt_remove_page() 구현(#1)
 
-void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
+							  void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
 	vm_dealloc_page(page);
 	return true;
@@ -217,5 +223,5 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 	struct page *page_a = hash_entry(a, struct page, hash_elem);
 	struct page *page_b = hash_entry(b, struct page, hash_elem);
 
-	return page_a->va > page_b->va;
+	return page_a->va < page_b->va;
 }
