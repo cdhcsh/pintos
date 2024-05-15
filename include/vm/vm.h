@@ -38,6 +38,9 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
+/** #project3-Memory management */
+#define SET_PAGE_OFFSET(addr) ((addr) & ~0xFFF)
+
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).
@@ -72,6 +75,8 @@ struct frame
 {
 	void *kva;
 	struct page *page;
+	/** #project3-Anonymous Page */
+	struct list_elem frame_elem;
 };
 
 /* The function table for page operations.

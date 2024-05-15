@@ -604,7 +604,6 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
-
 	file_seek(file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
@@ -634,7 +633,6 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			palloc_free_page(kpage);
 			return false;
 		}
-
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -685,6 +683,14 @@ install_page(void *upage, void *kpage, bool writable)
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
+struct lazy_arg
+{
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
@@ -696,8 +702,13 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: 이 함수를 호출할 때 VA가 사용 가능합니다. */
 
 	/** #project3-Anonymous Page */
-	struct file *file = thread_current()->runn_file;
-	file_read_at(file, page->va, PGSIZE, (off_t)aux);
+	struct lazy_arg *con = aux;
+	if (file_read_at(con->file, page->frame->kva, con->read_bytes, con->ofs) != con->read_bytes)
+	{
+		return false;
+	}
+	memset(page->frame->kva + con->read_bytes, 0, con->zero_bytes);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -746,8 +757,15 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		/* TODO: lazy_load_segment에 정보를 전달하기 위해 aux를 설정하세요. */
 		/** #project3-Anonymous Page */
 		void *aux = ofs;
+
+		struct lazy_arg *lazy_arg = (struct lazy_arg *)malloc(sizeof(struct lazy_arg));
+		lazy_arg->file = file;
+		lazy_arg->ofs = ofs;
+		lazy_arg->read_bytes = page_read_bytes;
+		lazy_arg->zero_bytes = page_zero_bytes;
+
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
+											writable, lazy_load_segment, lazy_arg))
 			return false;
 
 		/* Advance. */
@@ -774,7 +792,7 @@ setup_stack(struct intr_frame *if_)
 	/* TODO: 여기에 코드를 작성하세요 */
 
 	/** #project3-Anonymous Page */
-	if (vm_alloc_page(VM_MARKER_0, stack_bottom, 1))
+	if (vm_alloc_page(VM_ANON, stack_bottom, 1))
 	{
 		success = vm_claim_page(stack_bottom);
 	}
