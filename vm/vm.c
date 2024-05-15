@@ -6,6 +6,8 @@
 
 /** #project3-Memory management */
 #include <hash.h>
+#include <thread.h>
+#include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -90,9 +92,8 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 	else
 		return true;
 }
-Feat : spt_insert_page(), spt_remove_page() 구현(#1)
 
-							  void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
+void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
 	vm_dealloc_page(page);
 	return true;
@@ -127,8 +128,10 @@ static struct frame *
 vm_get_frame(void)
 {
 	struct frame *frame = NULL;
-	/* TODO: Fill this function. */
-
+	/** #project3-Memory management */
+	frame = palloc_get_page(PAL_USER | PAL_ZERO);
+	if (!frame)
+		PANIC("todo");
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
 	return frame;
@@ -167,14 +170,18 @@ void vm_dealloc_page(struct page *page)
 }
 
 /* Claim the page that allocate on VA. */
-bool vm_claim_page(void *va UNUSED)
+bool vm_claim_page(void *va)
 {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
 
-	return vm_do_claim_page(page);
+	/** #project3-Memory management */
+	page = spt_find_page(&thread_current()->spt, va);
+
+	if (page)
+		return vm_do_claim_page(page);
+	else
+		return false;
 }
-
 /* Claim the PAGE and set up the mmu. */
 static bool
 vm_do_claim_page(struct page *page)
@@ -185,7 +192,8 @@ vm_do_claim_page(struct page *page)
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	/** #project3-Memory management */
+	pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable);
 
 	return swap_in(page, frame->kva);
 }
