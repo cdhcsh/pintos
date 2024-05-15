@@ -147,7 +147,6 @@ fabric.properties
 *.lds.s
 *.bin
 *.dsk
-*.txt
 *.log
 
 userprog/build/
