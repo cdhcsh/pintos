@@ -694,6 +694,10 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: 파일에서 세그먼트를 로드합니다 */
 	/* TODO: VA 주소에서 첫 번째 페이지 폴트가 발생할 때 호출됩니다. */
 	/* TODO: 이 함수를 호출할 때 VA가 사용 가능합니다. */
+
+	/** #project3-Anonymous Page */
+	struct file *file = thread_current()->runn_file;
+	file_read_at(file, page->va, PGSIZE, (off_t)aux);
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -730,17 +734,18 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
-
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
-		/* Do calculate how to fill this page.
-		 * We will read PAGE_READ_BYTES bytes from FILE
-		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		/* 이 페이지를 어떻게 채울지 계산하세요.
+		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
+		 * 마지막 PAGE_ZERO_BYTES 바이트를 0으로 채웁니다. */
+
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		/* TODO: lazy_load_segment에 정보를 전달하기 위해 aux를 설정하세요. */
+		/** #project3-Anonymous Page */
+		void *aux = ofs;
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux))
 			return false;
@@ -749,6 +754,9 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+
+		/** #project3-Anonymous Page */
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -764,6 +772,8 @@ setup_stack(struct intr_frame *if_)
 	 * TODO: 성공하면 rsp를 적절히 설정합니다.
 	 * TODO: 페이지를 스택으로 표시해야 합니다. */
 	/* TODO: 여기에 코드를 작성하세요 */
+
+	/** #project3-Anonymous Page */
 
 	return success;
 }

@@ -6,7 +6,7 @@
 
 /** #project3-Memory management */
 #include <hash.h>
-#include <thread.h>
+#include "threads/thread.h"
 #include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
