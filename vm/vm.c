@@ -69,7 +69,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 			goto err;
 		bool (*initializer)(struct page *, enum vm_type, void *);
 
-		switch (type)
+		switch (VM_TYPE(type))
 		{
 		case VM_ANON:
 			initializer = anon_initializer;

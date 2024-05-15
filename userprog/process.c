@@ -774,7 +774,15 @@ setup_stack(struct intr_frame *if_)
 	/* TODO: 여기에 코드를 작성하세요 */
 
 	/** #project3-Anonymous Page */
+	if (vm_alloc_page(VM_MARKER_0, stack_bottom, 1))
+	{
+		success = vm_claim_page(stack_bottom);
+	}
 
+	if (success)
+	{
+		if_->rsp = USER_STACK;
+	}
 	return success;
 }
 #endif /* VM */
