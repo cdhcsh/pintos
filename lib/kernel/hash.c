@@ -71,16 +71,14 @@ void hash_clear(struct hash *h, hash_action_func *destructor)
 	h->elem_cnt = 0;
 }
 
-/* Destroys hash table H.
+/* 해시 테이블 H를 파괴합니다.
 
-   If DESTRUCTOR is non-null, then it is first called for each
-   element in the hash.  DESTRUCTOR may, if appropriate,
-   deallocate the memory used by the hash element.  However,
-   modifying hash table H while hash_clear() is running, using
-   any of the functions hash_clear(), hash_destroy(),
-   hash_insert(), hash_replace(), or hash_delete(), yields
-   undefined behavior, whether done in DESTRUCTOR or
-   elsewhere. */
+   DESTRUCTOR가 null이 아니면, 먼저 해시의 각 요소에 대해 호출됩니다.
+   DESTRUCTOR는 적절하다면 해시 요소에 사용된 메모리를 해제할 수 있습니다.
+   그러나 hash_clear()가 실행되는 동안 hash_clear(), hash_destroy(),
+   hash_insert(), hash_replace(), hash_delete() 함수 중 어느 것을 사용하여도,
+   DESTRUCTOR에서든 다른 곳에서든 해시 테이블 H를 수정하면 정의되지 않은 동작을 초래합니다. */
+
 void hash_destroy(struct hash *h, hash_action_func *destructor)
 {
 	if (destructor != NULL)

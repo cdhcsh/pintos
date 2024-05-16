@@ -116,7 +116,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 /** project2-System Call */
 void check_address(void *addr)
 {
-    if (is_kernel_vaddr(addr) || addr == NULL || pml4_get_page(thread_current()->pml4, addr) == NULL)
+    if (is_kernel_vaddr(addr) || addr == NULL || !spt_find_page(&thread_current()->spt, addr))
         exit(-1);
 }
 
@@ -153,8 +153,9 @@ int exec(const char *cmd_line)
     memcpy(cmd_copy, cmd_line, size);
 
     if (process_exec(cmd_copy) == -1)
-        return -1;
+        exit(-1);
 
+    NOT_REACHED();
     return 0; // process_exec 성공시 리턴 값 없음 (do_iret)
 }
 

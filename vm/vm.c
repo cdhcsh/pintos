@@ -46,6 +46,9 @@ static struct frame *vm_get_victim(void);
 static bool vm_do_claim_page(struct page *page);
 static struct frame *vm_evict_frame(void);
 
+/** #project3-Anonymous Page */
+static void hash_page_destroy(struct hash_elem *e, void *aux);
+
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
@@ -79,7 +82,6 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 			initializer = file_backed_initializer;
 			break;
 		}
-
 		uninit_new(page, upage, init, type, aux, initializer);
 		page->writable = writable;
 		return spt_insert_page(&thread_current()->spt, page);
@@ -96,7 +98,7 @@ spt_find_page(struct supplemental_page_table *spt, void *va)
 	/** #project3-Memory management */
 	struct page _;
 	struct hash_elem *e;
-	_.va = va;
+	_.va = pg_round_down(va);
 	return (e = hash_find(spt, &_.hash_elem)) ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 
@@ -197,7 +199,10 @@ bool vm_claim_page(void *va)
 	struct page *page = NULL;
 
 	/** #project3-Memory management */
-	return (page = spt_find_page(&thread_current()->spt, va)) ? vm_do_claim_page(page) : false;
+	if (page = spt_find_page(&thread_current()->spt, va))
+		return vm_do_claim_page(page);
+	else
+		return false;
 }
 
 /* Claim the PAGE and set up the mmu. */
@@ -225,23 +230,52 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 }
 
 /* Copy supplemental page table from src to dst */
-bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
-								  struct supplemental_page_table *src UNUSED)
+bool supplemental_page_table_copy(struct supplemental_page_table *dst,
+								  struct supplemental_page_table *src)
 {
+	/** #project3-Anonymous Page */
+
+	struct hash_iterator i;
+	hash_first(&i, &src->hash_table);
+	while (hash_next(&i))
+	{
+		struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		enum vm_type src_type = src_page->operations->type;
+		if (src_type == VM_UNINIT)
+		{
+			vm_alloc_page_with_initializer(
+				src_page->uninit.type,
+				src_page->va,
+				src_page->writable,
+				src_page->uninit.init,
+				src_page->uninit.aux);
+		}
+		else
+		{
+			if (vm_alloc_page(src_type, src_page->va, src_page->writable) && vm_claim_page(src_page->va))
+			{
+				struct page *dst_page = spt_find_page(dst, src_page->va);
+				memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+			}
+		}
+	}
+	return true;
+error:
+	supplemental_page_table_kill(dst);
+	return false;
 }
 
 /* Free the resource hold by the supplemental page table */
-void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
+void supplemental_page_table_kill(struct supplemental_page_table *spt)
 {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
+	/** #project3-Anonymous Page */
+	hash_clear(&spt->hash_table, hash_page_destroy);
 }
 
 /** #project3-Memory management */
 uint64_t page_hash(const struct hash_elem *e, void *aux)
 {
 	struct page *page = hash_entry(e, struct page, hash_elem);
-	page->va = VA_OFFSET(page->va);
 	return hash_bytes(&page->va, sizeof *page->va);
 }
 
@@ -251,4 +285,14 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 	struct page *page_b = hash_entry(b, struct page, hash_elem);
 
 	return page_a->va < page_b->va;
+}
+
+static void hash_page_destroy(struct hash_elem *e, void *aux)
+{
+	struct page *page = hash_entry(e, struct page, hash_elem);
+
+	if (page->frame)
+		free(page->frame);
+	// destroy(page);
+	free(page);
 }
