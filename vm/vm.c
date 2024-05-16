@@ -97,10 +97,7 @@ spt_find_page(struct supplemental_page_table *spt, void *va)
 	struct page _;
 	struct hash_elem *e;
 	_.va = va;
-	e = hash_find(spt, &_.hash_elem);
-	if (e)
-		page = hash_entry(e, struct page, hash_elem);
-	return page;
+	return (e = hash_find(spt, &_.hash_elem)) ? hash_entry(e, struct page, hash_elem) : NULL;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -108,15 +105,7 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 					 struct page *page)
 {
 	/** #project3-Memory management */
-	if (hash_insert(spt, &page->hash_elem))
-	{
-		return false;
-	}
-
-	else
-	{
-		return true;
-	}
+	return !hash_insert(spt, &page->hash_elem);
 }
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
@@ -157,11 +146,15 @@ vm_get_frame(void)
 	struct frame *frame = calloc(1, sizeof *frame);
 	if (!frame)
 		PANIC("todo");
-	ASSERT(frame != NULL);
-	ASSERT(frame->page == NULL);
+
 	frame->kva = palloc_get_page(PAL_USER | PAL_ZERO);
+	if (!frame->kva)
+		PANIC("todo");
+
 	list_push_back(&frame_table, &frame->frame_elem);
 	frame->page = NULL;
+	ASSERT(frame != NULL);
+	ASSERT(frame->page == NULL);
 	return frame;
 }
 
@@ -187,14 +180,7 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 	if (addr == NULL || is_kernel_vaddr(addr))
 		return false;
 
-	page = spt_find_page(spt, addr);
-	if (!page)
-	{
-		return false;
-	}
-	bool success;
-	success = vm_do_claim_page(page);
-	return success;
+	return (page = spt_find_page(spt, addr)) ? vm_do_claim_page(page) : false;
 }
 
 /* Free the page.
@@ -211,14 +197,9 @@ bool vm_claim_page(void *va)
 	struct page *page = NULL;
 
 	/** #project3-Memory management */
-	page = spt_find_page(&thread_current()->spt, va);
-	if (page)
-	{
-		return vm_do_claim_page(page);
-	}
-	else
-		return false;
+	return (page = spt_find_page(&thread_current()->spt, va)) ? vm_do_claim_page(page) : false;
 }
+
 /* Claim the PAGE and set up the mmu. */
 static bool
 vm_do_claim_page(struct page *page)
@@ -234,8 +215,7 @@ vm_do_claim_page(struct page *page)
 	/** #project3-Memory management */
 	pml4_set_page(cur->pml4, page->va, frame->kva, page->writable);
 
-	bool success = swap_in(page, frame->kva);
-	return success;
+	return swap_in(page, frame->kva);
 }
 /* Initialize new supplemental page table */
 void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
@@ -261,7 +241,7 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 uint64_t page_hash(const struct hash_elem *e, void *aux)
 {
 	struct page *page = hash_entry(e, struct page, hash_elem);
-	page->va = SET_PAGE_OFFSET((uint64_t)page->va);
+	page->va = VA_OFFSET(page->va);
 	return hash_bytes(&page->va, sizeof *page->va);
 }
 

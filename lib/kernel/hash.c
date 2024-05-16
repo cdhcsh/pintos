@@ -102,7 +102,6 @@ hash_insert(struct hash *h, struct hash_elem *new)
 		insert_elem(h, bucket, new);
 
 	rehash(h);
-
 	return old;
 }
 

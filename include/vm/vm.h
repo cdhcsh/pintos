@@ -39,7 +39,7 @@ struct thread;
 #define VM_TYPE(type) ((type) & 7)
 
 /** #project3-Memory management */
-#define SET_PAGE_OFFSET(addr) ((addr) & ~0xFFF)
+#define VA_OFFSET(addr) ((uint64_t)(addr) & ~0xFFF)
 
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are

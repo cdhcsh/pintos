@@ -754,7 +754,6 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* TODO: lazy_load_segment에 정보를 전달하기 위해 aux를 설정하세요. */
 		/** #project3-Anonymous Page */
 		void *aux = ofs;
 
@@ -783,24 +782,16 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack(struct intr_frame *if_)
 {
-	bool success = false;
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
 
-	/* TODO: 스택을 stack_bottom에 매핑하고 페이지를 즉시 할당합니다.
-	 * TODO: 성공하면 rsp를 적절히 설정합니다.
-	 * TODO: 페이지를 스택으로 표시해야 합니다. */
-	/* TODO: 여기에 코드를 작성하세요 */
-
 	/** #project3-Anonymous Page */
+	bool success = false;
+
 	if (vm_alloc_page(VM_ANON, stack_bottom, 1))
-	{
 		success = vm_claim_page(stack_bottom);
-	}
 
 	if (success)
-	{
 		if_->rsp = USER_STACK;
-	}
 	return success;
 }
 #endif /* VM */
