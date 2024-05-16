@@ -783,6 +783,8 @@ static bool
 setup_stack(struct intr_frame *if_)
 {
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
+	/** #project3-Stack Growth */
+	thread_current()->stack_bottom = stack_bottom;
 
 	/** #project3-Anonymous Page */
 	bool success = false;

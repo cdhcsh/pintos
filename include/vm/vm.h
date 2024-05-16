@@ -42,6 +42,10 @@ struct thread;
 /** #project3-Memory management */
 #define VA_OFFSET(addr) ((uint64_t)(addr) & ~0xFFF)
 
+/** #project3-Stack Growth */
+#include "threads/vaddr.h"
+#define USER_STACK_MIN (USER_STACK - (1 << 20))
+
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
  * uninit_page, file_page, anon_page, and page cache (project4).

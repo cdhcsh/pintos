@@ -162,8 +162,22 @@ vm_get_frame(void)
 
 /* Growing the stack. */
 static void
-vm_stack_growth(void *addr UNUSED)
+vm_stack_growth(void *addr)
 {
+	/** #project3-Stack Growth */
+	bool succ;
+	addr = pg_round_down(addr);
+	uint64_t stack_bottom = thread_current()->stack_bottom;
+
+	while (stack_bottom > USER_STACK_MIN && stack_bottom > addr)
+	{
+		stack_bottom -= PGSIZE;
+		if (vm_alloc_page(VM_ANON, stack_bottom, 1))
+			succ = vm_claim_page(stack_bottom);
+		if (!succ)
+			PANIC("todo - stack grows");
+	}
+	thread_current()->stack_bottom = stack_bottom;
 }
 
 /* Handle the fault on write_protected page */
@@ -178,10 +192,19 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 {
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
+
 	/** #project3-Anonymous Page */
 	if (addr == NULL || is_kernel_vaddr(addr))
 		return false;
 
+	/** #project3-Stack Growth */
+	if (addr >= USER_STACK_MIN)
+	{
+		if (addr != f->rsp)
+			return false;
+		vm_stack_growth(addr);
+		return true;
+	}
 	return (page = spt_find_page(spt, addr)) ? vm_do_claim_page(page) : false;
 }
 
@@ -287,6 +310,7 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 	return page_a->va < page_b->va;
 }
 
+/** #project3-Anonymous Page */
 static void hash_page_destroy(struct hash_elem *e, void *aux)
 {
 	struct page *page = hash_entry(e, struct page, hash_elem);
