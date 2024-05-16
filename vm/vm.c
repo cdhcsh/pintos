@@ -164,20 +164,8 @@ vm_get_frame(void)
 static void
 vm_stack_growth(void *addr)
 {
-	/** #project3-Stack Growth */
-	bool succ;
-	addr = pg_round_down(addr);
-	uint64_t stack_bottom = thread_current()->stack_bottom;
-
-	while (stack_bottom > USER_STACK_MIN && stack_bottom > addr)
-	{
-		stack_bottom -= PGSIZE;
-		if (vm_alloc_page(VM_ANON, stack_bottom, 1))
-			succ = vm_claim_page(stack_bottom);
-		if (!succ)
-			PANIC("todo - stack grows");
-	}
-	thread_current()->stack_bottom = stack_bottom;
+	// /** #project3-Stack Growth */
+	vm_alloc_page(VM_ANON, pg_round_down(addr), 1);
 }
 
 /* Handle the fault on write_protected page */
@@ -192,20 +180,27 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 {
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
-
+	void *rsp;
 	/** #project3-Anonymous Page */
-	if (addr == NULL || is_kernel_vaddr(addr))
-		return false;
 
+	if (addr == NULL || is_kernel_vaddr(addr) || !not_present)
+		return false;
 	/** #project3-Stack Growth */
-	if (addr >= USER_STACK_MIN)
-	{
-		if (addr != f->rsp)
-			return false;
+	if (user)
+		rsp = f->rsp;
+	else
+		rsp = thread_current()->rsp;
+
+	// printf("쉿! 폴트중~ addr: %p , rsp : %p 읽기 : %d\n", addr, rsp, write);
+
+	if (addr >= USER_STACK_MIN && (addr >= f->rsp || addr == f->rsp - 8))
 		vm_stack_growth(addr);
-		return true;
-	}
-	return (page = spt_find_page(spt, addr)) ? vm_do_claim_page(page) : false;
+
+	page = spt_find_page(spt, addr);
+
+	if (!page || (write && !page->writable))
+		return false;
+	return vm_do_claim_page(page);
 }
 
 /* Free the page.
@@ -317,6 +312,6 @@ static void hash_page_destroy(struct hash_elem *e, void *aux)
 
 	if (page->frame)
 		free(page->frame);
-	// destroy(page);
+	destroy(page);
 	free(page);
 }

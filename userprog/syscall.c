@@ -57,7 +57,9 @@ void syscall_handler(struct intr_frame *f UNUSED)
     // TODO: Your implementation goes here.
     /** project2-System Call */
     int sys_number = f->R.rax;
-
+#ifdef VM
+    thread_current()->rsp = f->rsp;
+#endif
     // Argument 순서
     // %rdi %rsi %rdx %r10 %r8 %r9
 
@@ -113,7 +115,6 @@ void syscall_handler(struct intr_frame *f UNUSED)
     }
 }
 
-/** project2-System Call */
 void check_address(void *addr)
 {
     if (is_kernel_vaddr(addr) || addr == NULL || !spt_find_page(&thread_current()->spt, addr))
@@ -207,8 +208,16 @@ int filesize(int fd)
 /** Project 2-Extend File Descriptor */
 int read(int fd, void *buffer, unsigned length)
 {
-    struct thread *curr = thread_current();
     check_address(buffer);
+
+/** #project3-Stack Growth */
+#ifdef VM
+    struct page *page = spt_find_page(&thread_current()->spt, buffer);
+    if (page && !page->writable)
+        exit(-1);
+#endif
+
+    struct thread *curr = thread_current();
 
     struct file *file = process_get_file(fd);
 
