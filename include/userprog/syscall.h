@@ -31,4 +31,10 @@ void close(int fd);
 /** Project 2-Extend File Descriptor */
 int dup2(int oldfd, int newfd);
 
+/** Project 3-Memory Mapped Files */
+#include "include/filesys/off_t.h";
+#include "stddef.h";
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
+
 #endif /* userprog/syscall.h */

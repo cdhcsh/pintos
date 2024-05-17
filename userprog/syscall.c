@@ -15,6 +15,9 @@
 #include "threads/palloc.h"
 #include "userprog/process.h"
 
+/** project3-Memory Mapped Files */
+#include "vm/vm.h"
+
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
@@ -109,6 +112,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
         break;
     case SYS_DUP2:
         f->R.rax = dup2(f->R.rdi, f->R.rsi);
+        break;
+    case SYS_MMAP:
+        f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+        break;
+    case SYS_MUNMAP:
+        munmap(f->R.rdi);
         break;
     default:
         exit(-1);
@@ -363,4 +372,56 @@ int dup2(int oldfd, int newfd)
     newfd = process_insert_file(newfd, oldfile);
 
     return newfd;
+}
+
+/** Project 3-Memory Mapped Files */
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+    // CASE 1. `addr` 가 0인 경우
+    if (addr == NULL)
+        goto error;
+    // CASE 2. `addr` 가 커널 가상 주소인 경우
+    if (is_kernel_vaddr(addr))
+        goto error;
+    // CASE 3. `addr` 가 page-aligned 되지 않은 경우
+    if (pg_ofs(addr))
+        goto error;
+    // CASE 4. 기존에 매핑된 페이지 집합(stack, 페이지)과 겹치는 경우
+    void *_addr = addr;
+    size_t _length = length;
+    while (length > 0)
+    {
+        size_t _b = _length > PGSIZE ? PGSIZE : _length;
+        if (spt_find_page(&thread_current()->spt, _addr))
+            goto error;
+        _addr += _b;
+        _length -= _b;
+    }
+    // CASE 5. 읽으려는 파일의 offset 위치가 PGSIZE 보다 큰 경우
+    if (offset > PGSIZE)
+        goto error;
+    // CASE 6. 읽으려는 파일의 길이가 0보다 작거나 같은 경우
+    if (length <= 0)
+        goto error;
+
+    // CASE 7. STDIN, STDOUT, STDERR 인 경우
+    // CASE 8. 파일 객체가 존재하지 않는 경우
+    struct file *file = process_get_file(fd);
+    if (file <= STDERR)
+        goto error;
+    // CASE 9. fd로 열린 파일의 길이가 0인 경우
+    if (file_length(file) == 0)
+        goto error;
+
+    return do_mmap(addr, length, writable, file, offset);
+
+error:
+    return NULL;
+}
+
+void munmap(void *addr)
+{
+    if (!addr || is_kernel_vaddr(addr) || pg_ofs(addr))
+        return;
+    do_munmap(addr);
 }
