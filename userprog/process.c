@@ -683,14 +683,6 @@ install_page(void *upage, void *kpage, bool writable)
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-struct lazy_arg
-{
-	struct file *file;
-	off_t ofs;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-};
-
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
@@ -702,7 +694,7 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: 이 함수를 호출할 때 VA가 사용 가능합니다. */
 
 	/** #project3-Anonymous Page */
-	struct lazy_arg *con = aux;
+	struct vm_load_arg *con = aux;
 	if (file_read_at(con->file, page->frame->kva, con->read_bytes, con->ofs) != con->read_bytes)
 	{
 		return false;
@@ -757,14 +749,14 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		/** #project3-Anonymous Page */
 		void *aux = ofs;
 
-		struct lazy_arg *lazy_arg = (struct lazy_arg *)malloc(sizeof(struct lazy_arg));
-		lazy_arg->file = file;
-		lazy_arg->ofs = ofs;
-		lazy_arg->read_bytes = page_read_bytes;
-		lazy_arg->zero_bytes = page_zero_bytes;
+		struct vm_load_arg *con = (struct vm_load_arg *)malloc(sizeof(struct vm_load_arg));
+		con->file = file;
+		con->ofs = ofs;
+		con->read_bytes = page_read_bytes;
+		con->zero_bytes = page_zero_bytes;
 
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, lazy_arg))
+											writable, lazy_load_segment, con))
 			return false;
 
 		/* Advance. */

@@ -52,4 +52,6 @@ static void
 anon_destroy(struct page *page)
 {
 	struct anon_page *anon_page = &page->anon;
+	/** Project 3-Memory Mapped Files */
+	// free(page->frame);
 }

@@ -177,30 +177,38 @@ int wait(pid_t tid)
 bool create(const char *file, unsigned initial_size)
 {
     check_address(file);
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
+    bool succ = filesys_create(file, initial_size);
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
 
-    return filesys_create(file, initial_size);
+    return succ;
 }
 
 bool remove(const char *file)
 {
     check_address(file);
-
-    return filesys_remove(file);
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
+    bool succ = filesys_remove(file);
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
+    return succ;
 }
 
 int open(const char *file)
 {
     check_address(file);
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
     struct file *newfile = filesys_open(file);
-
+    int fd = -1;
     if (newfile == NULL)
-        return -1;
-
-    int fd = process_add_file(newfile);
+        goto error;
+    fd = process_add_file(newfile);
 
     if (fd == -1)
+    {
         file_close(newfile);
-
+    }
+error:
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
     return fd;
 }
 
@@ -299,8 +307,9 @@ void seek(int fd, unsigned position)
 
     if (file == NULL || (file >= STDIN && file <= STDERR))
         return;
-
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
     file_seek(file, position);
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
 }
 
 int tell(int fd)
@@ -309,8 +318,10 @@ int tell(int fd)
 
     if (file == NULL || (file >= STDIN && file <= STDERR))
         return -1;
-
-    return file_tell(file);
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
+    int res = file_tell(file);
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
+    return res;
 }
 
 /** Project 2-Extend File Descriptor */
@@ -323,29 +334,23 @@ void close(int fd)
         return;
 
     process_close_file(fd);
-
-    if (file == STDIN)
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
+    if (file <= STDERR)
     {
-        file = 0;
-        return;
-    }
-
-    if (file == STDOUT)
-    {
-        file = 0;
-        return;
-    }
-
-    if (file == STDERR)
-    {
-        file = 0;
-        return;
+        goto done;
     }
 
     if (file->dup_count == 0)
+    {
         file_close(file);
+    }
+
     else
         file->dup_count--;
+
+done:
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
+    return;
 }
 
 /** Project 2-Extend File Descriptor */
@@ -383,27 +388,28 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
     // CASE 2. `addr` 가 커널 가상 주소인 경우
     if (is_kernel_vaddr(addr))
         goto error;
-    // CASE 3. `addr` 가 page-aligned 되지 않은 경우
-    if (pg_ofs(addr))
+    // CASE 3. `addr`나 `offset`가 page-aligned 되지 않은 경우
+    if (pg_ofs(addr) || pg_ofs(offset))
+        goto error;
+    // CASE 6. 읽으려는 파일의 길이가 0보다 작거나 같은 경우
+    if (length <= 0)
+        goto exit;
+    // CASE 5. 읽으려는 파일의 offset 위치가 PGSIZE 보다 큰 경우
+    if (offset > PGSIZE)
         goto error;
     // CASE 4. 기존에 매핑된 페이지 집합(stack, 페이지)과 겹치는 경우
     void *_addr = addr;
     size_t _length = length;
-    while (length > 0)
+    while (_length > 0)
     {
         size_t _b = _length > PGSIZE ? PGSIZE : _length;
+        if (is_kernel_vaddr(_addr))
+            goto error;
         if (spt_find_page(&thread_current()->spt, _addr))
             goto error;
         _addr += _b;
         _length -= _b;
     }
-    // CASE 5. 읽으려는 파일의 offset 위치가 PGSIZE 보다 큰 경우
-    if (offset > PGSIZE)
-        goto error;
-    // CASE 6. 읽으려는 파일의 길이가 0보다 작거나 같은 경우
-    if (length <= 0)
-        goto error;
-
     // CASE 7. STDIN, STDOUT, STDERR 인 경우
     // CASE 8. 파일 객체가 존재하지 않는 경우
     struct file *file = process_get_file(fd);
@@ -413,15 +419,26 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
     if (file_length(file) == 0)
         goto error;
 
-    return do_mmap(addr, length, writable, file, offset);
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
+    void *res = do_mmap(addr, length, writable, file, offset);
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
+
+    return res;
 
 error:
+    // NOT_REACHED();
     return NULL;
+exit:
+    exit(-1);
 }
 
 void munmap(void *addr)
 {
     if (!addr || is_kernel_vaddr(addr) || pg_ofs(addr))
+    {
         return;
+    }
+    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
     do_munmap(addr);
+    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
 }

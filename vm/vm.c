@@ -57,10 +57,11 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 {
 
 	ASSERT(VM_TYPE(type) != VM_UNINIT)
-
 	struct supplemental_page_table *spt = &thread_current()->spt;
+	// printf("할당할께~~ %p\n", upage);
 	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page(spt, upage) == NULL)
+	struct page *page = spt_find_page(spt, upage);
+	if (page == NULL)
 	{
 		/* TODO: 페이지를 생성하고, VM 유형에 따라 초기화자를 가져온 다음,
 		 * uninit_new를 호출하여 "uninit" 페이지 구조체를 생성하세요.
@@ -68,10 +69,11 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* TODO: 페이지를 spt에 삽입하세요. */
 
 		/** #project3-Anonymous Page */
-		struct page *page = malloc(sizeof(struct page));
+		page = malloc(sizeof(struct page));
 		if (!page)
 			goto err;
 		bool (*initializer)(struct page *, enum vm_type, void *);
+		initializer = NULL;
 
 		switch (VM_TYPE(type))
 		{
@@ -112,6 +114,7 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
+	hash_delete(&spt->hash_table, &page->hash_elem);
 	vm_dealloc_page(page);
 	return true;
 }
@@ -191,6 +194,8 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 	else
 		rsp = thread_current()->rsp;
 
+	page = spt_find_page(spt, addr);
+
 	// printf("쉿! 폴트중~ addr: %p , rsp : %p 읽기 : %d\n", addr, rsp, write);
 
 	if (addr >= USER_STACK_MIN && (addr >= f->rsp || addr == f->rsp - 8))
@@ -268,8 +273,18 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst,
 				src_page->uninit.init,
 				src_page->uninit.aux);
 		}
+		else if (src_type == VM_FILE)
+		{
+			if (vm_alloc_page(src_type, src_page->va, src_page->writable))
+			{
+				struct page *dst_page = spt_find_page(dst, src_page->va);
+				dst_page->frame = src_page->frame;
+				pml4_set_page(thread_current()->pml4, dst_page->va, src_page->frame->kva, src_page->writable);
+			}
+		}
 		else
 		{
+
 			if (vm_alloc_page(src_type, src_page->va, src_page->writable) && vm_claim_page(src_page->va))
 			{
 				struct page *dst_page = spt_find_page(dst, src_page->va);
@@ -310,8 +325,6 @@ static void hash_page_destroy(struct hash_elem *e, void *aux)
 {
 	struct page *page = hash_entry(e, struct page, hash_elem);
 
-	if (page->frame)
-		free(page->frame);
 	destroy(page);
 	free(page);
 }

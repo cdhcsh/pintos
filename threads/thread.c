@@ -815,6 +815,8 @@ void donate_priority()
 			break;
 
 		t = t->wait_lock->holder;
+		if (t == NULL)
+			break;
 		t->priority = priority;
 	}
 }
