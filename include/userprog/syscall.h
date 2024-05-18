@@ -9,7 +9,6 @@ void syscall_init(void);
 typedef int pid_t;
 
 #include <stdbool.h>
-void check_address(void *addr);
 void halt(void);
 void exit(int status);
 
@@ -32,9 +31,12 @@ void close(int fd);
 int dup2(int oldfd, int newfd);
 
 /** Project 3-Memory Mapped Files */
+
 #include "include/filesys/off_t.h";
 #include "stddef.h";
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
 void munmap(void *addr);
 
+struct page *check_address(void *addr);
+void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
 #endif /* userprog/syscall.h */

@@ -96,9 +96,13 @@ void syscall_handler(struct intr_frame *f UNUSED)
         f->R.rax = filesize(f->R.rdi);
         break;
     case SYS_READ:
+        /** Project 3-Memory Mapped Files */
+        check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
         f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_WRITE:
+        /** Project 3-Memory Mapped Files */
+        check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
         f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_SEEK:
@@ -114,7 +118,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
         f->R.rax = dup2(f->R.rdi, f->R.rsi);
         break;
     case SYS_MMAP:
-        f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+        f->R.rax = mmap((void *)f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
         break;
     case SYS_MUNMAP:
         munmap(f->R.rdi);
@@ -123,11 +127,27 @@ void syscall_handler(struct intr_frame *f UNUSED)
         exit(-1);
     }
 }
-
-void check_address(void *addr)
+/** Project 3-Memory Mapped Files */
+void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write)
 {
-    if (is_kernel_vaddr(addr) || addr == NULL || !spt_find_page(&thread_current()->spt, addr))
+    for (int i = 0; i < size; i += 10)
+    {
+        struct page *page = check_address(buffer + i);
+        if (page == NULL)
+            exit(-1);
+        if (to_write == true && page->writable == false)
+            exit(-1);
+    }
+}
+
+struct page *check_address(void *addr)
+{
+    if (is_kernel_vaddr(addr) || addr == NULL)
         exit(-1);
+    struct page *page = spt_find_page(&thread_current()->spt, addr);
+    if (!page)
+        exit(-1);
+    return page;
 }
 
 void halt(void)
@@ -198,6 +218,7 @@ int open(const char *file)
     check_address(file);
     lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
     struct file *newfile = filesys_open(file);
+
     int fd = -1;
     if (newfile == NULL)
         goto error;
