@@ -279,6 +279,11 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst,
 			{
 				struct page *dst_page = spt_find_page(dst, src_page->va);
 				dst_page->frame = src_page->frame;
+				/** Project 3-Memory Mapped Files */
+				dst_page->file.file = file_reopen(src_page->file.file);
+				dst_page->file.offset = src_page->file.offset;
+				dst_page->file.read_bytes = src_page->file.read_bytes;
+				dst_page->file.remain_pages = src_page->file.remain_pages;
 				pml4_set_page(thread_current()->pml4, dst_page->va, src_page->frame->kva, src_page->writable);
 			}
 		}
@@ -324,7 +329,6 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 static void hash_page_destroy(struct hash_elem *e, void *aux)
 {
 	struct page *page = hash_entry(e, struct page, hash_elem);
-
 	destroy(page);
 	free(page);
 }
