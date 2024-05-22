@@ -197,8 +197,10 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 	page = spt_find_page(spt, addr);
 
 	// printf("쉿! 폴트중~ addr: %p , rsp : %p 읽기 : %d\n", addr, rsp, write);
-
-	if (addr >= USER_STACK_MIN && (addr >= f->rsp || addr == f->rsp - 8))
+	/** #project3-Memory management */
+	if (USER_STACK_MIN <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK)
+		vm_stack_growth(addr);
+	else if (USER_STACK_MIN <= rsp && rsp <= addr && addr <= USER_STACK)
 		vm_stack_growth(addr);
 
 	page = spt_find_page(spt, addr);
@@ -257,7 +259,6 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst,
 								  struct supplemental_page_table *src)
 {
 	/** #project3-Anonymous Page */
-
 	struct hash_iterator i;
 	hash_first(&i, &src->hash_table);
 	while (hash_next(&i))
@@ -278,8 +279,9 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst,
 			if (vm_alloc_page(src_type, src_page->va, src_page->writable))
 			{
 				struct page *dst_page = spt_find_page(dst, src_page->va);
-				dst_page->frame = src_page->frame;
 				/** Project 3-Memory Mapped Files */
+				dst_page->frame = src_page->frame;
+				dst_page->operations = src_page->operations;
 				dst_page->file.file = file_reopen(src_page->file.file);
 				dst_page->file.offset = src_page->file.offset;
 				dst_page->file.read_bytes = src_page->file.read_bytes;
