@@ -6,6 +6,8 @@
 /** Project 3-Memory Mapped Files */
 #include "threads/mmu.h"
 #include <string.h>
+#include "userprog/syscall.h"
+#include "userprog/process.h"
 
 static bool file_backed_swap_in(struct page *page, void *kva);
 static bool file_backed_swap_out(struct page *page);
@@ -24,12 +26,15 @@ void vm_file_init(void)
 
 bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 {
+	// struct uninit_page *uninit = &page->uninit;
+	// void *aux = uninit->aux;
 	page->operations = &file_ops;
+	// memset(uninit, 0, sizeof(struct uninit_page));
 
 	struct file_page *file_page = &page->file;
 
 	/** Project 3-Memory Mapped Files */
-	struct vm_load_arg *arg = page->uninit.aux;
+	struct vm_load_arg *arg = (struct vm_load_arg *)page->uninit.aux;
 	file_page->file = arg->file;
 	file_page->offset = arg->ofs;
 	file_page->read_bytes = arg->read_bytes;
@@ -41,7 +46,8 @@ static bool
 file_backed_swap_in(struct page *page, void *kva)
 {
 	struct file_page *file_page = &page->file;
-	/** Project 3-Memory Mapped Files */
+
+	/** Project 3-Swap In/Out */
 	int read = file_read_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
 	memset(page->frame->kva + read, 0, PGSIZE - read);
 	return true;
@@ -51,6 +57,19 @@ static bool
 file_backed_swap_out(struct page *page)
 {
 	struct file_page *file_page UNUSED = &page->file;
+
+	/** Project 3-Swap In/Out */
+	struct frame *frame = page->frame;
+
+	if (pml4_is_dirty(thread_current()->pml4, page->va))
+	{
+		file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
+		pml4_set_dirty(thread_current()->pml4, page->va, false);
+	}
+	page->frame->page = NULL;
+	page->frame = NULL;
+	pml4_clear_page(thread_current()->pml4, page->va);
+	return true;
 }
 
 static void
@@ -59,16 +78,22 @@ file_backed_destroy(struct page *page)
 
 	struct file_page *file_page UNUSED = &page->file;
 
-	/** Project 3-Memory Mapped Files */
-	struct thread *curr = thread_current();
+	/** Project 3-Swap In/Out */
 	struct frame *frame = page->frame;
 
-	if (pml4_is_dirty(curr->pml4, page->va))
+	if (pml4_is_dirty(thread_current()->pml4, page->va))
 	{
-		file_write_at(file_page->file, frame->kva, file_page->read_bytes, file_page->offset);
-		pml4_set_dirty(curr->pml4, page->va, false);
+		file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
+		pml4_set_dirty(thread_current()->pml4, page->va, false);
 	}
-	pml4_clear_page(curr->pml4, page->va);
+	pml4_clear_page(thread_current()->pml4, page->va);
+	if (page->frame)
+	{
+		list_remove(&page->frame->frame_elem);
+		page->frame->page = NULL;
+		page->frame = NULL;
+		free(page->frame);
+	}
 }
 
 void *
@@ -95,7 +120,6 @@ do_mmap(void *addr, size_t length, int writable,
 			return false;
 		length -= page_read_bytes;
 		addr_ += PGSIZE;
-
 		offset += page_read_bytes;
 	}
 	return addr;
@@ -106,7 +130,6 @@ void do_munmap(void *addr)
 	/** Project 3-Memory Mapped Files */
 	struct thread *curr = thread_current();
 	struct page *page = spt_find_page(&curr->spt, addr);
-
 	while (page)
 	{
 		struct page *next = NULL;

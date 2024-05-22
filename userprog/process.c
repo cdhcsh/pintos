@@ -604,6 +604,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
+
 	file_seek(file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
@@ -625,9 +626,9 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			return false;
 		}
 		memset(kpage + page_read_bytes, 0, page_zero_bytes);
-
-		/* Add the page to the process's address space. */
-		if (!install_page(upage, kpage, writable))
+		å
+			/* Add the page to the process's address space. */
+			if (!install_page(upage, kpage, writable))
 		{
 			printf("fail\n");
 			palloc_free_page(kpage);
@@ -686,16 +687,11 @@ install_page(void *upage, void *kpage, bool writable)
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
-	/* TODO: Load the segment from the file */
-	/* TODO: This called when the first page fault occurs on address VA. */
-	/* TODO: VA is available when calling this function. */
-	/* TODO: 파일에서 세그먼트를 로드합니다 */
-	/* TODO: VA 주소에서 첫 번째 페이지 폴트가 발생할 때 호출됩니다. */
-	/* TODO: 이 함수를 호출할 때 VA가 사용 가능합니다. */
-
 	/** #project3-Anonymous Page */
 	struct vm_load_arg *con = aux;
-	if (file_read_at(con->file, page->frame->kva, con->read_bytes, con->ofs) != con->read_bytes)
+	file_seek(con->file, con->ofs);
+
+	if (file_read(con->file, page->frame->kva, con->read_bytes) != con->read_bytes)
 	{
 		return false;
 	}
@@ -737,6 +733,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
+
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* 이 페이지를 어떻게 채울지 계산하세요.
@@ -747,8 +744,6 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/** #project3-Anonymous Page */
-		void *aux = ofs;
-
 		struct vm_load_arg *con = (struct vm_load_arg *)malloc(sizeof(struct vm_load_arg));
 		con->file = file;
 		con->ofs = ofs;

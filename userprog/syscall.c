@@ -159,6 +159,8 @@ void exit(int status)
 {
     struct thread *t = thread_current();
     t->exit_status = status;
+    // if (status < 0)
+    //     PANIC("exit -1");
     printf("%s: exit(%d)\n", t->name, t->exit_status); // Process Termination Message
     thread_exit();
 }
@@ -355,7 +357,7 @@ void close(int fd)
         return;
 
     process_close_file(fd);
-    lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
+
     if (file <= STDERR)
     {
         goto done;
@@ -363,14 +365,16 @@ void close(int fd)
 
     if (file->dup_count == 0)
     {
+        lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
         file_close(file);
+        lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
     }
 
     else
         file->dup_count--;
 
 done:
-    lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
+
     return;
 }
 
