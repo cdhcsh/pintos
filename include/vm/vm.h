@@ -146,4 +146,7 @@ enum vm_type page_get_type(struct page *page);
 uint64_t page_hash(const struct hash_elem *e, void *aux);
 bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux);
 
+/** Project 3-Swap In/Out */
+void clear_frame(struct page *page);
+
 #endif /* VM_VM_H */

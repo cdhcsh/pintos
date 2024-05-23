@@ -97,12 +97,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
         break;
     case SYS_READ:
         /** Project 3-Memory Mapped Files */
-        check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
+        // check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
         f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_WRITE:
         /** Project 3-Memory Mapped Files */
-        check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
+        // check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
         f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_SEEK:

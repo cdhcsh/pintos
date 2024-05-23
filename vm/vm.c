@@ -9,6 +9,9 @@
 struct list frame_table;
 struct list_elem *next = NULL;
 
+/** Project 3-Swap In/Out */
+struct lock frame_lock;
+
 void vm_init(void)
 {
 	vm_anon_init();
@@ -19,6 +22,9 @@ void vm_init(void)
 	register_inspect_intr();
 
 	list_init(&frame_table);
+
+	/** Project 3-Swap In/Out */
+	lock_init(&frame_lock);
 }
 
 enum vm_type
@@ -143,13 +149,15 @@ vm_get_frame(void)
 	if (!frame->kva)
 	{
 		/** Project 3-Swap In/Out */
+		free(frame);
 		frame = vm_evict_frame();
 		frame->page = NULL;
 
 		return frame;
 	}
-
+	lock_acquire(&frame_lock);
 	list_push_back(&frame_table, &frame->frame_elem);
+	lock_release(&frame_lock);
 	frame->page = NULL;
 	// ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
@@ -316,4 +324,13 @@ static void hash_page_destroy(struct hash_elem *e, void *aux)
 	struct page *page = hash_entry(e, struct page, hash_elem);
 	destroy(page);
 	free(page);
+}
+void clear_frame(struct page *page)
+{
+	lock_acquire(&frame_lock);
+	list_remove(&page->frame->frame_elem);
+	lock_release(&frame_lock);
+	page->frame->page = NULL;
+	page->frame = NULL;
+	free(page->frame);
 }

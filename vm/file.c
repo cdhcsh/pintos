@@ -39,6 +39,9 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 	file_page->offset = arg->ofs;
 	file_page->read_bytes = arg->read_bytes;
 	file_page->remain_pages = arg->zero_bytes;
+
+	/** Project 3-Swap In/Out */
+	free(arg);
 	return true;
 }
 
@@ -86,13 +89,12 @@ file_backed_destroy(struct page *page)
 		file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
 		pml4_set_dirty(thread_current()->pml4, page->va, false);
 	}
+	file_close(file_page->file);
 	pml4_clear_page(thread_current()->pml4, page->va);
+
 	if (page->frame)
 	{
-		list_remove(&page->frame->frame_elem);
-		page->frame->page = NULL;
-		page->frame = NULL;
-		free(page->frame);
+		clear_frame(page);
 	}
 }
 
@@ -101,7 +103,6 @@ do_mmap(void *addr, size_t length, int writable,
 		struct file *file, off_t offset)
 {
 	/** Project 3-Memory Mapped Files */
-	struct file *file_ = file_reopen(file);
 	void *addr_ = addr;
 	unsigned remain_pages = (unsigned)pg_round_up(length) / PGSIZE;
 	while (length > 0)
@@ -110,7 +111,7 @@ do_mmap(void *addr, size_t length, int writable,
 		size_t page_read_bytes = length < PGSIZE ? length : PGSIZE;
 
 		struct vm_load_arg *con = (struct vm_load_arg *)malloc(sizeof(struct vm_load_arg));
-		con->file = file_;
+		con->file = file_reopen(file);
 		con->ofs = offset;
 		con->read_bytes = page_read_bytes;
 		con->zero_bytes = remain_pages;

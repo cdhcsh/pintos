@@ -95,9 +95,6 @@ anon_destroy(struct page *page)
 
 	if (page->frame)
 	{
-		list_remove(&page->frame->frame_elem);
-		page->frame->page = NULL;
-		free(page->frame);
-		page->frame = NULL;
+		clear_frame(page);
 	}
 }
