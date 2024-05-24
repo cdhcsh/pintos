@@ -37,6 +37,11 @@ int dup2(int oldfd, int newfd);
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
 void munmap(void *addr);
 
+#ifndef VM
+void check_address(void *addr);
+#else
 struct page *check_address(void *addr);
-void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
+#endif
+// void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
+void check_valid_buffer(void *buffer, size_t size, bool to_write);
 #endif /* userprog/syscall.h */

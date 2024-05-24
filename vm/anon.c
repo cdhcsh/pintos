@@ -43,9 +43,10 @@ anon_swap_in(struct page *page, void *kva)
 {
 	struct anon_page *anon_page = &page->anon;
 	/** Project 3-Swap In/Out */
-	lock_acquire(&swap_lock);
+	// lock_acquire(&swap_lock);
 	if (anon_page->page_no == BITMAP_ERROR)
-		return false;
+		return true;
+	lock_acquire(&swap_lock);
 
 	if (!bitmap_test(swap_bitmap, anon_page->page_no))
 		return false;
@@ -54,9 +55,10 @@ anon_swap_in(struct page *page, void *kva)
 
 	for (size_t i = 0; i < SECTOR_PER_PAGE; i++)
 		disk_read(swap_disk, (anon_page->page_no * SECTOR_PER_PAGE) + i, kva + (i * DISK_SECTOR_SIZE));
+	lock_release(&swap_lock);
 
 	anon_page->page_no = BITMAP_ERROR;
-	lock_release(&swap_lock);
+	// lock_release(&swap_lock);
 
 	return true;
 }
@@ -67,6 +69,7 @@ anon_swap_out(struct page *page)
 	struct anon_page *anon_page = &page->anon;
 	/** Project 3-Swap In/Out */
 	lock_acquire(&swap_lock);
+
 	size_t page_no = bitmap_scan_and_flip(swap_bitmap, 0, 1, false);
 
 	if (page_no == BITMAP_ERROR)
@@ -77,7 +80,7 @@ anon_swap_out(struct page *page)
 	anon_page->page_no = page_no;
 	page->frame->page = NULL;
 	page->frame = NULL;
-	pml4_clear_page(thread_current()->pml4, page->va);
+	pml4_clear_page(page->pml4, page->va);
 	lock_release(&swap_lock);
 }
 
@@ -93,8 +96,10 @@ anon_destroy(struct page *page)
 		lock_release(&swap_lock);
 	}
 
+	/** Project 3-Copy On Write */
 	if (page->frame)
 	{
 		clear_frame(page);
 	}
+	pml4_clear_page(page->pml4, page->va);
 }

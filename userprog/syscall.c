@@ -97,12 +97,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
         break;
     case SYS_READ:
         /** Project 3-Memory Mapped Files */
-        check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
+        // check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
         f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_WRITE:
         /** Project 3-Memory Mapped Files */
-        check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
+        // check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
         f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
         break;
     case SYS_SEEK:
@@ -128,27 +128,60 @@ void syscall_handler(struct intr_frame *f UNUSED)
     }
 }
 /** Project 3-Memory Mapped Files */
-void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write)
+// void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write)
+// {
+//     for (int i = 0; i < size; i += 8)
+//     {
+//         struct page *page = check_address(buffer + i);
+//         if (!page)
+//             exit(-1);
+//         if (!page->accessible && to_write)
+//             exit(-1);
+//     }
+// }
+
+// struct page *check_address(void *addr)
+// {
+//     if (is_kernel_vaddr(addr) || addr == NULL)
+//         exit(-1);
+//     struct page *page = spt_find_page(&thread_current()->spt, addr);
+//     if (!page)
+//         exit(-1);
+//     return page;
+// }
+#ifndef VM
+
+void check_address(void *addr)
 {
-    for (int i = 0; i < size; i += 10)
+    thread_t *curr = thread_current();
+
+    if (is_kernel_vaddr(addr) || addr == NULL || pml4_get_page(curr->pml4, addr) == NULL)
+        exit(-1);
+}
+#else
+/** #Project 3: Anonymous Page */
+struct page *check_address(void *addr)
+{
+    struct thread *curr = thread_current();
+
+    if (is_kernel_vaddr(addr) || addr == NULL)
+        exit(-1);
+
+    return spt_find_page(&curr->spt, addr);
+}
+
+void check_valid_buffer(void *buffer, size_t size, bool to_write)
+{
+    for (size_t i = 0; i < size; i += 8)
     {
         struct page *page = check_address(buffer + i);
-        if (page == NULL)
-            exit(-1);
-        if (to_write == true && page->writable == false)
+
+        if (!page || (to_write && !(page->accessible)))
             exit(-1);
     }
 }
 
-struct page *check_address(void *addr)
-{
-    if (is_kernel_vaddr(addr) || addr == NULL)
-        exit(-1);
-    struct page *page = spt_find_page(&thread_current()->spt, addr);
-    if (!page)
-        exit(-1);
-    return page;
-}
+#endif
 
 void halt(void)
 {
@@ -159,8 +192,6 @@ void exit(int status)
 {
     struct thread *t = thread_current();
     t->exit_status = status;
-    // if (status < 0)
-    //     PANIC("exit -1");
     printf("%s: exit(%d)\n", t->name, t->exit_status); // Process Termination Message
     thread_exit();
 }
@@ -201,6 +232,8 @@ bool create(const char *file, unsigned initial_size)
     check_address(file);
     lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
     bool succ = filesys_create(file, initial_size);
+    // if (!succ)
+    //     printf("실패!\n");
     lock_release(&filesys_lock); /** Project 3-Memory Mapped Files */
 
     return succ;
@@ -220,12 +253,10 @@ int open(const char *file)
     check_address(file);
     lock_acquire(&filesys_lock); /** Project 3-Memory Mapped Files */
     struct file *newfile = filesys_open(file);
-
     int fd = -1;
     if (newfile == NULL)
         goto error;
     fd = process_add_file(newfile);
-
     if (fd == -1)
     {
         file_close(newfile);
@@ -248,14 +279,10 @@ int filesize(int fd)
 /** Project 2-Extend File Descriptor */
 int read(int fd, void *buffer, unsigned length)
 {
-    check_address(buffer);
-
-/** #project3-Stack Growth */
 #ifdef VM
-    struct page *page = spt_find_page(&thread_current()->spt, buffer);
-    if (page && !page->writable)
-        exit(-1);
+    check_valid_buffer(buffer, length, true);
 #endif
+    check_address(buffer);
 
     struct thread *curr = thread_current();
 
@@ -292,6 +319,9 @@ int read(int fd, void *buffer, unsigned length)
 /** Project 2-Extend File Descriptor */
 int write(int fd, const void *buffer, unsigned length)
 {
+#ifdef VM
+    check_valid_buffer(buffer, length, false);
+#endif
     check_address(buffer);
 
     struct thread *curr = thread_current();

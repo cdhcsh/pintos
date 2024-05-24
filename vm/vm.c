@@ -76,6 +76,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		}
 		uninit_new(page, upage, init, type, aux, initializer);
 		page->writable = writable;
+		page->accessible = writable;
 		page->pml4 = thread_current()->pml4; /** Project 3-Swap In/Out */
 		return spt_insert_page(&thread_current()->spt, page);
 	}
@@ -99,7 +100,7 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 					 struct page *page)
 {
 	/** #project3-Memory management */
-	return !hash_insert(spt, &page->hash_elem);
+	return !hash_insert(&spt->hash_table, &page->hash_elem);
 }
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
@@ -117,8 +118,8 @@ vm_get_victim(void)
 	for (next = list_begin(&frame_table); next != list_end(&frame_table); next = list_next(next))
 	{
 		victim = list_entry(next, struct frame, frame_elem);
-		if (pml4_is_accessed(thread_current()->pml4, victim->page->va))
-			pml4_set_accessed(thread_current()->pml4, victim->page->va, false);
+		if (pml4_is_accessed(victim->page->pml4, victim->page->va))
+			pml4_set_accessed(victim->page->pml4, victim->page->va, false);
 		else
 			return victim;
 	}
@@ -172,8 +173,21 @@ vm_stack_growth(void *addr)
 }
 
 static bool
-vm_handle_wp(struct page *page UNUSED)
+vm_handle_wp(struct page *page)
 {
+	/** Project 3-Copy On Write */
+	if (!page->accessible)
+		return false;
+	void *parent_kva = page->frame->kva;
+
+	page->frame = vm_get_frame();
+	page->frame->page = page;
+	page->writable = page->accessible;
+	memcpy(page->frame->kva, parent_kva, PGSIZE);
+
+	pml4_clear_page(page->pml4, page->va);
+	pml4_set_page(page->pml4, page->va, page->frame->kva, page->writable);
+	return swap_in(page, page->frame->kva);
 }
 
 bool vm_try_handle_fault(struct intr_frame *f, void *addr,
@@ -184,7 +198,10 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 	void *rsp;
 	/** #project3-Anonymous Page */
 
-	if (addr == NULL || is_kernel_vaddr(addr) || !not_present)
+	// printf("쉿! 폴트중~ addr: %p write : %d not_present : %d\n", addr, write, not_present);
+
+	/** Project 3-Copy On Write */
+	if (addr == NULL || is_kernel_vaddr(addr)) // ! not_present
 		return false;
 	/** #project3-Stack Growth */
 	if (user)
@@ -192,9 +209,6 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 	else
 		rsp = thread_current()->rsp;
 
-	page = spt_find_page(spt, addr);
-
-	// printf("쉿! 폴트중~ addr: %p , rsp : %p 읽기 : %d\n", addr, rsp, write);
 	/** #project3-Memory management */
 	if (USER_STACK_MIN <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK)
 		vm_stack_growth(addr);
@@ -203,8 +217,11 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 
 	page = spt_find_page(spt, addr);
 
-	if (!page || (write && !page->writable))
+	if (!page)
 		return false;
+	if (write && !page->writable)
+		return vm_handle_wp(page);
+
 	return vm_do_claim_page(page);
 }
 
@@ -237,13 +254,27 @@ vm_do_claim_page(struct page *page)
 	/** #project3-Memory management */
 	if (!pml4_set_page(page->pml4, page->va, frame->kva, page->writable)) /** Project 3-Swap In/Out */
 		return false;
-	// printf("kva : %p\n", frame->kva);
+
 	return swap_in(page, frame->kva);
 }
 void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 {
 	/** #project3-Memory management */
 	hash_init(&spt->hash_table, page_hash, page_less, NULL);
+}
+
+static void copy_frame(struct page *src_page, struct page *dst_page)
+{
+	if (!src_page->frame)
+		return;
+	dst_page->frame = calloc(1, sizeof(struct frame));
+	if (!dst_page->frame)
+		return false;
+	dst_page->frame->kva = src_page->frame->kva;
+	dst_page->frame->page = dst_page;
+	lock_acquire(&frame_lock);
+	list_push_back(&frame_table, &dst_page->frame->frame_elem);
+	lock_release(&frame_lock);
 }
 
 bool supplemental_page_table_copy(struct supplemental_page_table *dst,
@@ -274,21 +305,29 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst,
 				struct page *dst_page = spt_find_page(dst, src_page->va);
 
 				/** Project 3-Memory Mapped Files */
-				dst_page->frame = src_page->frame;
+				/** Project 3-Copy On Write */
+				copy_frame(src_page, dst_page);
 				dst_page->operations = src_page->operations;
 				dst_page->file.file = file_reopen(src_page->file.file);
 				dst_page->file.offset = src_page->file.offset;
 				dst_page->file.read_bytes = src_page->file.read_bytes;
 				dst_page->file.remain_pages = src_page->file.remain_pages;
-				pml4_set_page(thread_current()->pml4, dst_page->va, src_page->frame->kva, src_page->writable); /** Project 3-Swap In/Out */
+				pml4_set_page(dst_page->pml4, dst_page->va, src_page->frame->kva, src_page->writable); /** Project 3-Swap In/Out */
 			}
 		}
 		else
 		{
-			if (vm_alloc_page(src_type, src_page->va, src_page->writable) && vm_claim_page(src_page->va))
+			/** Project 3-Copy On Write */
+			if (vm_alloc_page(src_type, src_page->va, src_page->writable))
 			{
 				struct page *dst_page = spt_find_page(dst, src_page->va);
-				memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+				copy_frame(src_page, dst_page);
+				dst_page->operations = src_page->operations;
+				dst_page->anon.page_no = src_page->anon.page_no;
+				dst_page->writable = false;
+				dst_page->accessible = src_page->writable;
+				pml4_set_page(dst_page->pml4, dst_page->va, src_page->frame->kva, false);
+				// swap_in(dst_page, NULL);
 			}
 		}
 	}

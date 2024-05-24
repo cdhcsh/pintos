@@ -64,14 +64,14 @@ file_backed_swap_out(struct page *page)
 	/** Project 3-Swap In/Out */
 	struct frame *frame = page->frame;
 
-	if (pml4_is_dirty(thread_current()->pml4, page->va))
+	if (pml4_is_dirty(page->pml4, page->va))
 	{
 		file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
-		pml4_set_dirty(thread_current()->pml4, page->va, false);
+		pml4_set_dirty(page->pml4, page->va, false);
 	}
 	page->frame->page = NULL;
 	page->frame = NULL;
-	pml4_clear_page(thread_current()->pml4, page->va);
+	pml4_clear_page(page->pml4, page->va);
 	return true;
 }
 
@@ -84,18 +84,18 @@ file_backed_destroy(struct page *page)
 	/** Project 3-Swap In/Out */
 	struct frame *frame = page->frame;
 
-	if (pml4_is_dirty(thread_current()->pml4, page->va))
+	if (pml4_is_dirty(page->pml4, page->va))
 	{
 		file_write_at(file_page->file, page->frame->kva, file_page->read_bytes, file_page->offset);
-		pml4_set_dirty(thread_current()->pml4, page->va, false);
+		pml4_set_dirty(page->pml4, page->va, false);
 	}
 	file_close(file_page->file);
-	pml4_clear_page(thread_current()->pml4, page->va);
 
 	if (page->frame)
 	{
 		clear_frame(page);
 	}
+	pml4_clear_page(page->pml4, page->va);
 }
 
 void *
